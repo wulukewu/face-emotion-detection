@@ -7,3 +7,4 @@ scikit-image
 opencv-python
 joblib
 streamlit
+streamlit-webrtc
