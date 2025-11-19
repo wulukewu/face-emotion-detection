@@ -6,94 +6,89 @@ from PIL import Image
 import av
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
-# Import our custom feature extractor
 import feature_extractor as fe
 
 IMG_SIZE = (64, 64)
 
-# --- 1. Load Model and Preprocessors ---
+# --- 1. Load Model, Preprocessors, and Face Detector ---
 try:
     model = joblib.load("emotion_model.joblib")
     scaler = joblib.load("feature_scaler.joblib")
     label_map = joblib.load("label_map.joblib")
-    print("Model and supporting files loaded successfully.")
+    print("Model loaded.")
 except FileNotFoundError:
-    st.error("Error: Could not find model files.")
-    st.error("Please run 'python train_model.py' first to generate the model files.")
+    st.error("Error: Model files not found.")
+    st.stop()
+
+# Load OpenCV's pre-trained Haar Cascade for face detection
+try:
+    # cv2.data.haarcascades points to the folder where opencv keeps xml files
+    face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    face_cascade = cv2.CascadeClassifier(face_cascade_path)
+    if face_cascade.empty():
+        raise IOError("Failed to load Haar Cascade xml file.")
+except Exception as e:
+    st.error(f"Error loading Face Detector: {e}")
     st.stop()
 
 # --- 2. Define the Real-time Video Processor ---
 
 class EmotionTransformer(VideoTransformerBase):
-    def __init__(self):
-        # We can store the last predicted label to make the text smoother
-        self.last_label = "Waiting..."
-
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        """
-        This function is called by streamlit-webrtc for every frame.
-        """
-        # 1. Convert the frame to an OpenCV-compatible format (BGR)
+        # 1. Get the frame from the webcam
         img_bgr = frame.to_ndarray(format="bgr24")
-        
-        # 2. Convert to grayscale for our model
         img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
         
-        try:
-            # 3. Run our prediction pipeline (from feature_extractor.py)
-            features = fe.preprocess_and_extract_features_single(img_gray, img_size=IMG_SIZE)
+        # 2. Detect faces in the frame
+        # scaleFactor=1.1, minNeighbors=5 are standard parameters
+        faces = face_cascade.detectMultiScale(img_gray, 1.1, 5)
+        
+        # 3. Loop through each detected face
+        for (x, y, w, h) in faces:
+            # Draw a rectangle around the face
+            cv2.rectangle(img_bgr, (x, y), (x+w, y+h), (255, 0, 0), 2)
             
-            # 4. Standardize
-            features_scaled = scaler.transform(features)
-            
-            # 5. Predict
-            prediction_idx = model.predict(features_scaled)[0]
-            prediction_label = label_map[prediction_idx]
-            
-            # (Optional: Get probabilities for display)
-            # probabilities = model.predict_proba(features_scaled)[0]
-            # prob_max = np.max(probabilities)
-            # self.last_label = f"{prediction_label} ({prob_max*100:.1f}%)"
-            
-            self.last_label = f"Emotion: {prediction_label}"
+            try:
+                # --- CRITICAL STEP ---
+                # Crop the face region (Region of Interest - ROI)
+                face_roi = img_gray[y:y+h, x:x+w]
+                
+                # Run prediction ONLY on the cropped face
+                # Note: The feature extractor handles resizing to (64, 64)
+                features = fe.preprocess_and_extract_features_single(face_roi, img_size=IMG_SIZE)
+                features_scaled = scaler.transform(features)
+                
+                # Predict
+                prediction_idx = model.predict(features_scaled)[0]
+                prediction_label = label_map[prediction_idx]
+                
+                # Draw the label above the face
+                cv2.putText(
+                    img_bgr,
+                    prediction_label,
+                    (x, y - 10), # Position above the box
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    (36, 255, 12), # Color (Green)
+                    2
+                )
+            except Exception as e:
+                pass # If prediction fails for a frame, just ignore
 
-        except Exception as e:
-            # If feature extraction fails (e.g., no face), just skip
-            # print(f"Error during prediction: {e}") 
-            pass
-
-        # 6. Draw the result back onto the *color* frame
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(
-            img_bgr,
-            self.last_label,
-            (10, 50),  # Position (x, y)
-            font,
-            1,  # Font scale
-            (255, 255, 255),  # Color (White)
-            2,  # Thickness
-            cv2.LINE_AA,
-        )
-
-        # 7. Convert the modified frame back to the format Streamlit expects
+        # 4. Return the annotated frame
         return av.VideoFrame.from_ndarray(img_bgr, format="bgr24")
 
 # --- 3. Streamlit Interface ---
 st.title("Live Facial Emotion Recognition 📸")
-st.write("Based on LBP + HOG Feature Engineering & Random Forest Model")
-st.write("Click 'START' to begin. Your browser will ask for camera permission.")
+st.write("Now with Face Detection! (Blue box = Face detected)")
 
-# This is the main component that runs the webcam
 webrtc_streamer(
     key="emotion-detection",
     video_transformer_factory=EmotionTransformer,
-    rtc_configuration={  # This is needed for deployment
+    rtc_configuration={
         "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
     },
-    media_stream_constraints={
-        "video": True,
-        "audio": False
-    }
+    media_stream_constraints={"video": True, "audio": False}
 )
 
 st.write(f"Recognizes: {list(label_map.values())}")
