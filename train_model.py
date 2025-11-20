@@ -1,3 +1,4 @@
+# %%
 import os
 import cv2
 import numpy as np
@@ -6,177 +7,192 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import time
 import joblib
-from collections import Counter
+import random
+
+# Scikit-Learn for ML
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Import our custom feature extractors
+# Import the helper file we just created
 import feature_extractor as fe
 
-# --- 1. Configuration ---
-DATA_PATH = "Data" 
+# CONFIGURATION
+DATA_PATH = "Data"
 IMG_SIZE = (64, 64)
 
-# --- 2. Data Loading & EDA ---
+print("Libraries loaded successfully.")
 
-def load_data(path, img_size):
-    """
-    Loads images and labels from structured folders.
-    """
-    images = []
-    labels = []
-    label_map = {}
-    label_idx = 0
-    
-    print(f"Loading data from {path}...")
-    
-    for emotion_folder in os.listdir(path):
-        emotion_path = os.path.join(path, emotion_folder)
+# %%
+images = []
+labels = []
+label_map = {}
+label_idx = 0
+
+print(f"Loading images from {DATA_PATH}...")
+
+# Loop through folders (Angry, Happy, etc.)
+for emotion_folder in os.listdir(DATA_PATH):
+    emotion_path = os.path.join(DATA_PATH, emotion_folder)
+    if not os.path.isdir(emotion_path): continue
         
-        if not os.path.isdir(emotion_path):
-            continue
-            
-        if emotion_folder not in label_map:
-            label_map[emotion_folder] = label_idx
-            label_idx += 1
-            
-        label = label_map[emotion_folder]
-        
-        for img_file in os.listdir(emotion_path):
-            img_path = os.path.join(emotion_path, img_file)
-            try:
-                img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                if img is None:
-                    print(f"Warning: Could not read {img_path}")
-                    continue
-                img_resized = cv2.resize(img, img_size)
-                images.append(img_resized)
-                labels.append(label)
-            except Exception as e:
-                print(f"Error processing {img_path}: {e}")
-                
-    print(f"Data loading complete. Total {len(images)} images.")
-    inv_label_map = {v: k for k, v in label_map.items()}
-    return np.array(images), np.array(labels), inv_label_map
+    # Assign a number to the emotion (Happy=0, Sad=1...)
+    if emotion_folder not in label_map:
+        label_map[emotion_folder] = label_idx
+        label_idx += 1
+    
+    current_label = label_map[emotion_folder]
+    
+    # Loop through images
+    for img_file in os.listdir(emotion_path):
+        full_path = os.path.join(emotion_path, img_file)
+        # Read as Grayscale
+        img = cv2.imread(full_path, cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            img_resized = cv2.resize(img, IMG_SIZE)
+            images.append(img_resized)
+            labels.append(current_label)
 
-def plot_data_distribution(labels, inv_label_map):
-    """
-    Visualize the distribution of samples per class.
-    """
-    label_counts = Counter(labels)
-    label_names = [inv_label_map[i] for i in label_counts.keys()]
-    counts = list(label_counts.values())
-    
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x=label_names, y=counts)
-    plt.title("Sample Distribution per Emotion Class")
-    plt.xlabel("Emotion")
-    plt.ylabel("Count")
-    plt.savefig("data_distribution.png") # Save the plot
-    print("Data distribution plot saved as data_distribution.png")
-    # plt.show() # Uncomment if running in an interactive environment
+# Convert to Numpy Arrays (The format ML models need)
+X_raw = np.array(images)
+y = np.array(labels)
+inv_label_map = {v: k for k, v in label_map.items()}
 
-# --- 3. Main Training & Evaluation Pipeline ---
+print(f"Loaded {len(X_raw)} images.")
+print(f"Image Shape: {X_raw.shape}") # Should be (Num_Images, 64, 64)
+print(f"Labels: {label_map}")
 
-def main():
-    # --- Part 1: Load and Explore Data ---
-    X_raw_images, y_labels, inv_label_map = load_data(DATA_PATH, IMG_SIZE)
-    if X_raw_images.size == 0:
-        print(f"No images loaded. Check DATA_PATH: {DATA_PATH}")
-        return
-        
-    print(f"Label map created: {inv_label_map}")
-    plot_data_distribution(y_labels, inv_label_map)
+# %%
+# Create a simple dataframe just for plotting
+df_plot = pd.DataFrame({'Label': [inv_label_map[i] for i in y]})
 
-    # --- Part 2: Feature Extraction ---
-    print("\n--- Extracting Features ---")
-    X_pixels = fe.extract_pixel_features(X_raw_images)
-    print(f"Pixel features shape: {X_pixels.shape}")
-    
-    X_lbp = fe.extract_lbp_features(X_raw_images)
-    print(f"LBP features shape: {X_lbp.shape}")
-    
-    X_hog = fe.extract_hog_features(X_raw_images)
-    print(f"HOG features shape: {X_hog.shape}")
-    
-    X_combined = np.concatenate([X_lbp, X_hog], axis=1)
-    print(f"LBP + HOG combined features shape: {X_combined.shape}")
-    
-    feature_sets = {
-        "Pixels": X_pixels,
-        "LBP": X_lbp,
-        "HOG": X_hog,
-        "LBP + HOG": X_combined
-    }
-    
-    # --- Part 3: Model Comparison ---
-    print("\n--- Starting Model Iterative Comparison (using LogisticRegression) ---")
-    results = {}
-    model_lr = LogisticRegression(max_iter=1000, random_state=42)
+plt.figure(figsize=(8, 5))
+sns.countplot(data=df_plot, x='Label', palette='viridis')
+plt.title("How many images do we have per emotion?")
+plt.ylabel("Count")
+plt.show()
 
-    for name, X in feature_sets.items():
-        print(f"\nTraining model with: {name} features (Shape: {X.shape})")
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y_labels, test_size=0.25, random_state=42, stratify=y_labels
-        )
-        
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        start_time = time.time()
-        model_lr.fit(X_train_scaled, y_train)
-        end_time = time.time()
-        
-        y_pred = model_lr.predict(X_test_scaled)
-        acc = accuracy_score(y_test, y_pred)
-        
-        results[name] = {
-            "accuracy": acc,
-            "train_time": end_time - start_time,
-            "n_features": X.shape[1]
-        }
-        print(f"Done. Accuracy: {acc:.4f}, Training time: {end_time - start_time:.2f}s")
+# %%
+# Pick a random image
+rand_idx = random.randint(0, len(X_raw) - 1)
+sample_img = X_raw[rand_idx]
+sample_label = inv_label_map[y[rand_idx]]
 
-    print("\n--- Feature Engineering Impact Summary ---")
-    results_df = pd.DataFrame(results).T.sort_values(by="accuracy", ascending=False)
-    print(results_df)
-    
-    # --- Part 4: Train and Save Best Model ---
-    print("\n--- Training and Saving Best Model (RandomForest w/ LBP+HOG) ---")
-    
-    # Use the best features (LBP + HOG)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_combined, y_labels, test_size=0.25, random_state=42, stratify=y_labels
-    )
-    
-    # Create and fit the final scaler *on the training data*
-    final_scaler = StandardScaler()
-    X_train_scaled = final_scaler.fit_transform(X_train)
-    X_test_scaled = final_scaler.transform(X_test)
-    
-    # Create and fit the final model
-    final_model = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
-    final_model.fit(X_train_scaled, y_train)
-    
-    # Evaluate final model
-    y_pred_final = final_model.predict(X_test_scaled)
-    final_acc = accuracy_score(y_test, y_pred_final)
-    print(f"Final Model Accuracy: {final_acc:.4f}")
-    
-    print("Final Model Classification Report:")
-    print(classification_report(y_test, y_pred_final, target_names=inv_label_map.values()))
-    
-    # Save the model, scaler, and label map
-    joblib.dump(final_model, "emotion_model.joblib")
-    joblib.dump(final_scaler, "feature_scaler.joblib")
-    joblib.dump(inv_label_map, "label_map.joblib")
-    
-    print("\nModel, scaler, and label map saved successfully!")
-    print("You are now ready to run 'streamlit run app.py'")
+# Get HOG visualization (Edges/Shapes)
+_, hog_vis = fe._extract_hog_single(sample_img, visualize=True)
 
-if __name__ == "__main__":
-    main()
+# Get LBP Histogram (Texture)
+lbp_hist = fe._extract_lbp_single(sample_img)
+
+# Plot them
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+# 1. Raw Image
+axes[0].imshow(sample_img, cmap='gray')
+axes[0].set_title(f"1. Raw Input (Gray)\nEmotion: {sample_label}")
+axes[0].axis('off')
+
+# 2. HOG Features
+axes[1].imshow(hog_vis, cmap='gray')
+axes[1].set_title("2. HOG Features\n(Model sees: Edges/Shape)")
+axes[1].axis('off')
+
+# 3. LBP Features
+axes[2].bar(range(len(lbp_hist)), lbp_hist)
+axes[2].set_title("3. LBP Histogram\n(Model sees: Texture Info)")
+
+plt.show()
+
+# %%
+print("Starting Feature Extraction... (This may take a moment)")
+start_t = time.time()
+
+# 1. Extract Pixel Features (Just flattening the image)
+X_pixels = fe.extract_pixel_features(X_raw)
+
+# 2. Extract LBP (Texture)
+X_lbp = fe.extract_lbp_features(X_raw)
+
+# 3. Extract HOG (Shape)
+X_hog = fe.extract_hog_features(X_raw)
+
+# 4. Combine LBP + HOG (The Best Version)
+X_combined = np.concatenate([X_lbp, X_hog], axis=1)
+
+print(f"\nDone! Total time: {time.time() - start_t:.2f}s")
+print(f"Combined Feature Shape: {X_combined.shape}")
+
+# %%
+import warnings
+# 1. Silence the scary math warnings for the demo
+warnings.filterwarnings('ignore') 
+
+print("Running Comparison Experiment...")
+
+feature_sets = {
+    "Raw Pixels": X_pixels,
+    "HOG Only": X_hog,
+    "Combined (HOG+LBP)": X_combined
+}
+
+results = []
+
+for name, X_data in feature_sets.items():
+    # Split Data
+    X_train, X_test, y_train, y_test = train_test_split(X_data, y, test_size=0.2, stratify=y)
+    
+    # Scale Data
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc = scaler.transform(X_test)
+    
+    # Train
+    # CHANGE: We use 'liblinear' solver which is more stable, 
+    # and increase max_iter to 1000 so it doesn't complain.
+    model = LogisticRegression(solver='liblinear', max_iter=1000)
+    
+    t0 = time.time()
+    model.fit(X_train_sc, y_train)
+    train_time = time.time() - t0
+    
+    # Score
+    acc = accuracy_score(y_test, model.predict(X_test_sc))
+    results.append({"Method": name, "Accuracy": acc, "Time": train_time})
+    print(f"Finished {name} -> Accuracy: {acc:.2%}")
+
+# Show Table
+df_results = pd.DataFrame(results).sort_values("Accuracy", ascending=False)
+print("\n--- FINAL RESULTS ---")
+print(df_results)
+
+# Reset warnings just in case you need them later
+warnings.filterwarnings('default')
+
+# %%
+print("Training Final Random Forest Model...")
+
+# 1. Use the Best Data
+X_final = X_combined
+X_train, X_test, y_train, y_test = train_test_split(X_final, y, test_size=0.2, random_state=42, stratify=y)
+
+# 2. Scale
+final_scaler = StandardScaler()
+X_train_scaled = final_scaler.fit_transform(X_train)
+X_test_scaled = final_scaler.transform(X_test)
+
+# 3. Train Random Forest (Stronger than Logistic Regression)
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_model.fit(X_train_scaled, y_train)
+
+# 4. Evaluate
+y_pred = rf_model.predict(X_test_scaled)
+print(f"Final Accuracy: {accuracy_score(y_test, y_pred):.2%}")
+print(classification_report(y_test, y_pred, target_names=inv_label_map.values()))
+
+# 5. Save Files
+joblib.dump(rf_model, "emotion_model.joblib")
+joblib.dump(final_scaler, "feature_scaler.joblib")
+joblib.dump(inv_label_map, "label_map.joblib")
+print("Model saved! You can now run 'streamlit run app.py'")
