@@ -1,31 +1,47 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim
+# --- Build Stage ---
+# This stage builds the model and saves it as .joblib files
+FROM python:3.9-slim as builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies for OpenCV
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies needed for training
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file and install dependencies
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy the application code and data needed for training
 COPY . .
 
-# Train the model and generate the necessary files
+# Run the training script to generate the model files
 RUN python train_model.py
 
-# Make port 8501 available to the world outside this container
-EXPOSE 8501
 
-# Define environment variable
+# --- Final Stage ---
+# This stage builds the final, smaller image for deployment
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install system dependencies needed for OpenCV runtime
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# Copy only the necessary files from the builder stage
+COPY --from=builder /app/app.py .
+COPY --from=builder /app/feature_extractor.py .
+COPY --from=builder /app/emotion_model.joblib .
+COPY --from=builder /app/feature_scaler.joblib .
+COPY --from=builder /app/label_map.joblib .
+
+# Expose port and run the application
+EXPOSE 8501
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
-
-# Run app.py when the container launches
 CMD ["streamlit", "run", "app.py"]
