@@ -208,3 +208,8 @@ __marimo__/
 
 # Mac system files
 .DS_Store
+
+# Trained model files
+emotion_model.joblib
+feature_scaler.joblib
+label_map.joblib
