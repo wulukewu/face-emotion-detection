@@ -16,7 +16,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Import the helper file we just created
+# Import the helper file
 import feature_extractor as fe
 
 # CONFIGURATION
@@ -126,7 +126,7 @@ print(f"Combined Feature Shape: {X_combined.shape}")
 
 # %%
 import warnings
-# 1. Silence the scary math warnings for the demo
+# Silence the scary math warnings
 warnings.filterwarnings('ignore') 
 
 print("Running Comparison Experiment...")
@@ -140,19 +140,16 @@ feature_sets = {
 results = []
 
 for name, X_data in feature_sets.items():
-    # Split Data
+    # Split Data 80% Train / 20% Test
     X_train, X_test, y_train, y_test = train_test_split(X_data, y, test_size=0.2, stratify=y)
     
-    # Scale Data
+    # Scale Data (Important for ML!)
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc = scaler.transform(X_test)
     
-    # Train
-    # CHANGE: We use 'liblinear' solver which is more stable, 
-    # and increase max_iter to 1000 so it doesn't complain.
-    model = LogisticRegression(solver='liblinear', max_iter=1000)
-    
+    # Quick Train
+    model = LogisticRegression(max_iter=500)
     t0 = time.time()
     model.fit(X_train_sc, y_train)
     train_time = time.time() - t0
@@ -167,7 +164,7 @@ df_results = pd.DataFrame(results).sort_values("Accuracy", ascending=False)
 print("\n--- FINAL RESULTS ---")
 print(df_results)
 
-# Reset warnings just in case you need them later
+# Reset warnings
 warnings.filterwarnings('default')
 
 # %%
