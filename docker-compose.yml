@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  face-emotion-detection:
+    build: .
+    image: face-emotion-detection:latest
+    container_name: face-emotion-detection
+    ports:
+      - "8501:8501"

@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Virtual environment
+venv
+.venv
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Data - This is needed for training, but it's large.
+# We will copy it in the Dockerfile, but ignore it for local dev context
+# Data/
+
+# IDE
+.idea/
+.vscode/
+
+# Temp files
+*.tmp
+*.swp
