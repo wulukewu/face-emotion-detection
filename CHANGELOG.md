@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.0...v1.0.1) (2025-11-23)
+
+
+### Bug Fixes
+
+* run docker without training data ([#4](https://github.com/wulukewu/face-emotion-detection/issues/4)) ([d005a94](https://github.com/wulukewu/face-emotion-detection/commit/d005a94ad8704e47fa139480c8f555ec880cc0d9))
+
 ## 1.0.0 (2025-11-20)
 
 
