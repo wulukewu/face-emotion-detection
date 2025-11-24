@@ -15,8 +15,8 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 # Copy the application code and data needed for training
 COPY . .
 
-# Run both training scripts to generate all model files
-RUN python train_model.py && python train_cnn.py
+# Run CNN training script to generate model files
+RUN python train_cnn.py
 
 
 # --- Final Stage ---
@@ -36,8 +36,6 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 # Copy only the necessary files from the builder stage
 COPY --from=builder /app/app.py .
 COPY --from=builder /app/feature_extractor.py .
-COPY --from=builder /app/emotion_model.joblib .
-COPY --from=builder /app/feature_scaler.joblib .
 COPY --from=builder /app/label_map.joblib .
 COPY --from=builder /app/emotion_model_cnn.h5 .
 
