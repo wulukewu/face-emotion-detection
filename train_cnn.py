@@ -4,6 +4,8 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 import cv2
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Docker
 import matplotlib.pyplot as plt
 import joblib
 
@@ -16,58 +18,61 @@ from sklearn.model_selection import train_test_split
 # CONFIGURATION
 DATA_PATH = "Data"
 IMG_SIZE = (64, 64)
-MODEL_PATH = "emotion_model_cnn.h5"  # 存成 .h5 格式，這是 Keras 的標準
+MODEL_PATH = "emotion_model_cnn.h5"
 
 print(f"TensorFlow Version: {tf.__version__}")
 print("Loading images for CNN...")
 
-# --- 1. 資料載入 (與原本類似，但不做 HOG/LBP) ---
+# --- Data Loading ---
 images = []
 labels = []
 label_map = {}
 label_idx = 0
 
-# 確保 Data 資料夾存在
+# Ensure Data folder exists
 if not os.path.exists(DATA_PATH):
     print(f"Error: {DATA_PATH} not found.")
     exit()
 
+# Loop through folders (Angry, Happy, etc.)
 for emotion_folder in os.listdir(DATA_PATH):
     emotion_path = os.path.join(DATA_PATH, emotion_folder)
     if not os.path.isdir(emotion_path): continue
     
-    # 建立標籤對應表
+    # Assign a number to the emotion (Happy=0, Sad=1...)
     if emotion_folder not in label_map:
         label_map[emotion_folder] = label_idx
         label_idx += 1
     
     current_label = label_map[emotion_folder]
     
+    # Loop through images
     for img_file in os.listdir(emotion_path):
         full_path = os.path.join(emotion_path, img_file)
-        img = cv2.imread(full_path, cv2.IMREAD_GRAYSCALE) # 讀取灰階
+        # Read as Grayscale
+        img = cv2.imread(full_path, cv2.IMREAD_GRAYSCALE)
         if img is not None:
             img_resized = cv2.resize(img, IMG_SIZE)
             images.append(img_resized)
             labels.append(current_label)
 
-# 轉換為 Numpy Array
+# Convert to Numpy Arrays (The format ML models need)
 X = np.array(images)
 y = np.array(labels)
 
-# --- 2. 深度學習專用預處理 (關鍵步驟！) ---
+# --- Deep Learning Preprocessing (Key Steps!) ---
 
-# A. 正規化 (Normalization): 將像素值從 0-255 縮放到 0-1 之間
+# A. Normalization: Scale pixel values from 0-255 to 0-1
 X = X / 255.0
 
-# B. Reshape: CNN 需要輸入形狀為 (長, 寬, 通道數)
-# 灰階圖只有 1 個通道，所以要變成 (64, 64, 1)
+# B. Reshape: CNN needs input shape (height, width, channels)
+# Grayscale images have 1 channel, so reshape to (64, 64, 1)
 X = X.reshape(-1, 64, 64, 1)
 
-# C. One-Hot Encoding: 將標籤 0, 1, 2 變成 [1,0,0], [0,1,0]...
+# C. One-Hot Encoding: Convert labels 0, 1, 2 to [1,0,0], [0,1,0]...
 y_onehot = to_categorical(y, num_classes=len(label_map))
 
-# 切分訓練集與測試集
+# Split into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(
     X, y_onehot, test_size=0.2, stratify=y, random_state=42
 )
@@ -76,67 +81,67 @@ print(f"Dataset Shape: {X.shape}")
 print(f"Training Samples: {len(X_train)}")
 print(f"Testing Samples: {len(X_test)}")
 
-# --- 3. 搭建 Keras CNN 模型 (期末簡報重點) ---
-# Sequential: 代表層是一層一層堆疊下去的
+# --- Build Keras CNN Model ---
+# Sequential: Layers are stacked one after another
 model = Sequential([
-    # 第一層卷積：提取基礎特徵 (如線條、邊緣)
+    # First Convolutional Layer: Extract basic features (lines, edges)
     Conv2D(32, (3, 3), activation='relu', input_shape=(64, 64, 1)),
-    MaxPooling2D((2, 2)), # 縮減圖片尺寸，保留重要特徵
+    MaxPooling2D((2, 2)),  # Reduce image size, keep important features
 
-    # 第二層卷積：提取更複雜的特徵 (如眼睛、嘴巴形狀)
+    # Second Convolutional Layer: Extract complex features (eyes, mouth shape)
     Conv2D(64, (3, 3), activation='relu'),
     MaxPooling2D((2, 2)),
 
-    # 第三層卷積
+    # Third Convolutional Layer
     Conv2D(128, (3, 3), activation='relu'),
     MaxPooling2D((2, 2)),
 
-    # 攤平層：將立體的特徵圖拉平成一維陣列，準備進全連接層
+    # Flatten Layer: Convert 3D feature maps to 1D array for Dense layers
     Flatten(),
 
-    # 全連接層 (Dense)：進行分類
+    # Fully Connected Layer (Dense): Perform classification
     Dense(128, activation='relu'),
     
-    # Dropout: 隨機丟棄 50% 神經元，防止過擬合 (Overfitting)
+    # Dropout: Randomly drop 50% of neurons to prevent overfitting
     Dropout(0.5),
 
-    # 輸出層：有幾個情緒就輸出幾個機率值 (Softmax 讓總和為 1)
+    # Output Layer: Output probability for each emotion (Softmax sums to 1)
     Dense(len(label_map), activation='softmax')
 ])
 
-# 編譯模型
+# Compile model
 model.compile(optimizer='adam',
               loss='categorical_crossentropy',
               metrics=['accuracy'])
 
-model.summary() # 顯示模型架構 (可以截圖放在簡報)
+model.summary()  # Display model architecture
 
-# --- 4. 開始訓練 ---
-print("\nStarting Training... (這可能會花幾分鐘)")
+# --- Start Training ---
+print("\nStarting Training... (This may take a few minutes)")
 history = model.fit(
     X_train, y_train,
-    epochs=15,             # 訓練 15 輪
-    batch_size=32,         # 每次看 32 張圖
-    validation_data=(X_test, y_test) # 用測試集驗證成效
+    epochs=15,             # Train for 15 rounds
+    batch_size=32,         # Process 32 images at a time
+    validation_data=(X_test, y_test)  # Validate with test set
 )
 
-# --- 5. 評估與存檔 ---
+# --- Evaluation and Save ---
 test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f"\nFinal Test Accuracy: {test_acc:.2%}")
 
-# 儲存模型 (Keras 格式)
+# Save model (Keras format)
 model.save(MODEL_PATH)
 
-# 儲存標籤對應表 (App 預測時需要知道 0 是 Angry 還是 Happy)
+# Save label mapping (App needs to know 0=Angry or Happy)
 inv_label_map = {v: k for k, v in label_map.items()}
-joblib.dump(inv_label_map, "label_map.joblib") # 覆蓋舊的沒關係，只要確保一致
+joblib.dump(inv_label_map, "label_map.joblib")
 
 print(f"Model saved to {MODEL_PATH}")
 
-# --- 6. 繪製訓練曲線 (簡報素材) ---
+# --- Plot Training Curves ---
 plt.figure(figsize=(12, 5))
 
-# 左圖：準確率
+# Left plot: Accuracy
 plt.subplot(1, 2, 1)
 plt.plot(history.history['accuracy'], label='Train Accuracy')
 plt.plot(history.history['val_accuracy'], label='Test Accuracy')
@@ -145,7 +150,7 @@ plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
 plt.legend()
 
-# 右圖：損失值
+# Right plot: Loss
 plt.subplot(1, 2, 2)
 plt.plot(history.history['loss'], label='Train Loss')
 plt.plot(history.history['val_loss'], label='Test Loss')
@@ -154,4 +159,6 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
 
-plt.show()
+# Save the figure instead of showing it (for Docker compatibility)
+plt.savefig('training_history_cnn.png')
+print("Training history plot saved to training_history_cnn.png")
