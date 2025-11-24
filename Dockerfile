@@ -15,8 +15,8 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 # Copy the application code and data needed for training
 COPY . .
 
-# Run the training script to generate the model files
-RUN python train_model.py
+# Run both training scripts to generate all model files
+RUN python train_model.py && python train_cnn.py
 
 
 # --- Final Stage ---
@@ -39,6 +39,7 @@ COPY --from=builder /app/feature_extractor.py .
 COPY --from=builder /app/emotion_model.joblib .
 COPY --from=builder /app/feature_scaler.joblib .
 COPY --from=builder /app/label_map.joblib .
+COPY --from=builder /app/emotion_model_cnn.h5 .
 
 # Expose port and run the application
 EXPOSE 8501

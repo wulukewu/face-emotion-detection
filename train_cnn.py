@@ -4,6 +4,8 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 import cv2
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Docker
 import matplotlib.pyplot as plt
 import joblib
 
@@ -154,4 +156,6 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
 
-plt.show()
+# Save the figure instead of showing it (for Docker compatibility)
+plt.savefig('training_history_cnn.png')
+print("Training history plot saved to training_history_cnn.png")
