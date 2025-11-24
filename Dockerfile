@@ -21,8 +21,7 @@ COPY . .
 
 # Run the training scripts to generate model files
 # These will be copied to the final image
-# RUN python train_model.py
-# RUN python train_cnn.py
+RUN python train_model.py & python train_cnn.py & wait
 
 # --- Final Stage ---
 # This stage creates the final, smaller image for deployment
@@ -43,10 +42,12 @@ RUN pip install --upgrade pip && pip install --no-cache-dir --break-system-packa
 # Copy necessary files from the host
 COPY app.py .
 COPY feature_extractor.py .
-COPY emotion_model.joblib .
-COPY feature_scaler.joblib .
-COPY label_map.joblib .
-COPY emotion_model_cnn.h5 .
+
+# Copy the trained models from the builder stage
+COPY --from=builder /app/emotion_model.joblib .
+COPY --from=builder /app/feature_scaler.joblib .
+COPY --from=builder /app/label_map.joblib .
+COPY --from=builder /app/emotion_model_cnn.h5 .
 
 
 # Expose port and run the application
