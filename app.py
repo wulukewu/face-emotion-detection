@@ -35,7 +35,7 @@ def load_cnn_model():
         # Load label mapping
         if os.path.exists("label_map.joblib"):
             label_map = joblib.load("label_map.joblib")
-            if isinstance(list(label_map.keys())[0], str):
+            if label_map and isinstance(list(label_map.keys())[0], str):
                  resources['inv_map'] = {v: k for k, v in label_map.items()}
             else:
                  resources['inv_map'] = label_map 
@@ -64,7 +64,7 @@ def predict_emotion(face_img):
     """
     Predict emotion using CNN model
     """
-    if not resources or resources['cnn_model'] is None:
+    if not resources or 'cnn_model' not in resources or resources['cnn_model'] is None:
         return "Error", 0.0, {}
 
     img_resized = cv2.resize(face_img, (64, 64))
