@@ -161,7 +161,7 @@ plt.show()
 
 # %%
 # 1. Get predictions
-y_pred_probs = model.predict(X_test) # Returns probabilities [0.1, 0.9, ...]
+y_pred_probs = model.predict(X_test, batch_size=32) # Returns probabilities [0.1, 0.9, ...]
 y_pred_classes = np.argmax(y_pred_probs, axis=1) # Convert to [1]
 y_true_classes = np.argmax(y_test, axis=1)       # Convert to [1]
 
