@@ -21,7 +21,7 @@ COPY . .
 
 # Run the training scripts to generate model files
 # These will be copied to the final image
-RUN python train_model.py & python train_cnn.py & wait
+RUN python train_model.py && python train_cnn.py
 
 # --- Final Stage ---
 # This stage creates the final, smaller image for deployment
