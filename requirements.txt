@@ -1,4 +1,4 @@
-# --- 核心數據處理 ---
+# --- Core Data Processing ---
 ipykernel
 numpy<2.0.0
 pandas
@@ -6,24 +6,24 @@ matplotlib
 seaborn
 joblib
 
-# --- 機器學習 ---
+# --- Machine Learning ---
 scikit-learn
 
-# --- 影像處理 ---
-# 限制 OpenCV 版本以配合 NumPy 1.x
+# --- Image Processing ---
+# Limit OpenCV version to work with NumPy 1.x
 opencv-python<4.10.0
 scikit-image
 
-# --- Web 應用框架 ---
+# --- Web Application Framework ---
 streamlit
 streamlit-webrtc
 av
 
-# --- 深度學習 (TensorFlow) ---
-# 這裡就是魔法所在：
-# 1. 如果是 Mac (Darwin) 且是 ARM 架構 (M1/M2/M3)，安裝 apple 優化版
+# --- Deep Learning (TensorFlow) ---
+# Platform-specific TensorFlow installation:
+# 1. For Mac (Darwin) with ARM architecture (M1/M2/M3), install Apple optimized version
 tensorflow-macos; sys_platform == 'darwin' and platform_machine == 'arm64'
 tensorflow-metal; sys_platform == 'darwin' and platform_machine == 'arm64'
 
-# 2. 如果是 Windows (win32) 或 Linux (linux)，安裝標準版
+# 2. For Windows (win32) or Linux (linux), install standard version
 tensorflow; sys_platform != 'darwin' or platform_machine != 'arm64'

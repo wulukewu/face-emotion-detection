@@ -7,51 +7,32 @@ import pandas as pd
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 import os
 
-# --- 1. Mac M3 關鍵設定 (防止 Mutex Lock 崩潰) ---
+# Mac M3 Configuration (Prevent Mutex Lock Crash)
 os.environ["OMP_NUM_THREADS"] = "1"
 
-# --- 2. TensorFlow 必須在設定完環境變數後匯入 ---
+# TensorFlow must be imported after setting environment variables
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
-# 匯入你的特徵提取工具
-import feature_extractor as fe
+# Page Configuration
+st.set_page_config(page_title="Face Emotion Detection", page_icon="🧠", layout="wide")
 
-# --- 3. 全域配置 (解決 ScriptRunContext 警告的關鍵) ---
-# 我們用這個字典來在 UI 和 背景執行緒 之間傳遞設定
-if "system_config" not in st.session_state:
-    st.session_state.system_config = {"model_type": "Traditional ML (HOG+RF)"}
-
-# 定義一個全域變數引用，讓背景執行緒也能讀到
-SYSTEM_CONFIG = {"model_type": "Traditional ML (HOG+RF)"}
-
-# --- 4. 頁面設定 ---
-st.set_page_config(page_title="Emotion AI Dual-Core", page_icon="🧠", layout="wide")
-
-# --- 5. 載入模型資源 (快取加速) ---
+# Load Model Resources (Cached)
 @st.cache_resource
-def load_all_models():
+def load_cnn_model():
     """
-    一次載入所有模型資源
+    Load CNN model and label mapping
     """
     resources = {}
     try:
-        # A. 載入傳統機器學習模型
-        if os.path.exists("emotion_model.joblib"):
-            resources['rf_model'] = joblib.load("emotion_model.joblib")
-            resources['scaler'] = joblib.load("feature_scaler.joblib")
-        else:
-            st.error("⚠️ 找不到 emotion_model.joblib，請先執行 train_model.py")
-            return None
-        
-        # B. 載入深度學習模型 (CNN)
+        # Load CNN model
         if os.path.exists("emotion_model_cnn.h5"):
             resources['cnn_model'] = load_model("emotion_model_cnn.h5")
         else:
-            st.warning("⚠️ 找不到 emotion_model_cnn.h5 (CNN 模型)，請先執行 train_cnn.py")
-            resources['cnn_model'] = None
+            st.error("⚠️ Cannot find emotion_model_cnn.h5, please run train_cnn.py first")
+            return None
 
-        # C. 載入標籤對應表
+        # Load label mapping
         if os.path.exists("label_map.joblib"):
             label_map = joblib.load("label_map.joblib")
             if isinstance(list(label_map.keys())[0], str):
@@ -59,7 +40,7 @@ def load_all_models():
             else:
                  resources['inv_map'] = label_map 
         else:
-            st.error("⚠️ 找不到 label_map.joblib")
+            st.error("⚠️ Cannot find label_map.joblib")
             return None
              
         return resources
@@ -67,46 +48,35 @@ def load_all_models():
         st.error(f"Error loading model files: {e}")
         return None
 
-# 執行載入
-resources = load_all_models()
+# Execute loading
+resources = load_cnn_model()
 label_map = resources['inv_map'] if resources else {}
 
-# 載入人臉偵測器
+# Load face detector
 try:
     cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     face_cascade = cv2.CascadeClassifier(cascade_path)
 except Exception as e:
     st.error(f"Error loading Face Detector: {e}")
 
-# --- 6. 核心預測函式 (包含 Mac M3 修復) ---
-def predict_emotion(face_img, model_type):
+# Core Prediction Function
+def predict_emotion(face_img):
     """
-    根據使用者選擇，將圖片送往不同的模型
+    Predict emotion using CNN model
     """
-    if not resources:
+    if not resources or resources['cnn_model'] is None:
         return "Error", 0.0, {}
 
-    # A. 傳統機器學習路徑
-    if model_type == "Traditional ML (HOG+RF)":
-        features = fe.preprocess_and_extract_features_single(face_img)
-        features_scaled = resources['scaler'].transform(features)
-        probs = resources['rf_model'].predict_proba(features_scaled)[0]
+    img_resized = cv2.resize(face_img, (64, 64))
+    # Normalize (divide by 255) - Important step!
+    img_norm = img_resized.astype("float32") / 255.0
+    img_input = img_norm.reshape(1, 64, 64, 1)
+    
+    # Predict (Mac M3 fix: Force CPU usage)
+    with tf.device('/cpu:0'):
+        probs = resources['cnn_model'].predict(img_input, verbose=0)[0]
 
-    # B. 深度學習 (CNN) 路徑
-    else:
-        if resources['cnn_model'] is None:
-            return "No Model", 0.0, {}
-
-        img_resized = cv2.resize(face_img, (64, 64))
-        # Normalize (除以 255) - 這一步超級重要！
-        img_norm = img_resized.astype("float32") / 255.0
-        img_input = img_norm.reshape(1, 64, 64, 1)
-        
-        # 預測 (Mac M3 關鍵修復：強制用 CPU)
-        with tf.device('/cpu:0'):
-            probs = resources['cnn_model'].predict(img_input, verbose=0)[0]
-
-    # 後處理
+    # Post-processing
     best_idx = np.argmax(probs)
     best_label = label_map[best_idx]
     best_conf = probs[best_idx]
@@ -114,7 +84,7 @@ def predict_emotion(face_img, model_type):
     
     return best_label, best_conf, prob_dict
 
-# --- 7. 影像處理類別 (背景執行緒) ---
+# Video Processing Class (Background Thread)
 class EmotionProcessor(VideoProcessorBase):
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         try:
@@ -129,15 +99,13 @@ class EmotionProcessor(VideoProcessorBase):
                 
                 try:
                     face_roi = img_gray[y:y+h, x:x+w]
-                    
-                    # 【修正】直接讀取全域變數
-                    current_model = SYSTEM_CONFIG["model_type"]
-                    
-                    label, conf, _ = predict_emotion(face_roi, model_type=current_model)
+                    label, conf, _ = predict_emotion(face_roi)
                     
                     color = (0, 255, 0)
-                    if label in ['Angry', 'Fear', 'Sad']: color = (0, 0, 255)
-                    elif label == 'Happy': color = (0, 255, 255)
+                    if label in ['Angry', 'Fear', 'Sad']: 
+                        color = (0, 0, 255)
+                    elif label == 'Happy': 
+                        color = (0, 255, 255)
                     
                     cv2.rectangle(img, (x, y-30), (x+w, y), color, -1)
                     text = f"{label} ({int(conf*100)}%)"
@@ -153,36 +121,21 @@ class EmotionProcessor(VideoProcessorBase):
             print(f"Frame Processing Error: {e}")
             return frame
 
-# --- 8. 主介面 UI ---
+# Main UI
 
 st.title("🧠 Face Emotion Detection System")
-st.markdown("### Scikit-Learn vs TensorFlow comparison")
+st.markdown("### Deep Learning CNN Model")
 
-# --- 側邊欄 ---
+# Sidebar
 with st.sidebar:
-    st.header("⚙️ Model Settings")
-    
-    model_choice = st.radio(
-        "Choose AI Core:",
-        ("Traditional ML (HOG+RF)", "Deep Learning (CNN)"),
-        index=0
-    )
-    
-    # 【修正】更新全域變數
-    SYSTEM_CONFIG["model_type"] = model_choice
-    
-    st.divider()
-    st.info(f"**Current Engine:**\n{model_choice}")
-    
-    if model_choice == "Traditional ML (HOG+RF)":
-        st.caption("✅ Fast Inference\n✅ Explicit Features (LBP/HOG)\n❌ Less Robust to lighting")
-    else:
-        st.caption("✅ Deep Learning\n✅ End-to-End Feature Learning\n⚠️ Running on CPU (Mac Optimization)")
+    st.header("⚙️ Model Information")
+    st.info("**Deep Learning (CNN)**")
+    st.caption("✅ End-to-End Feature Learning\n✅ 3-Layer Convolutional Network\n⚠️ Running on CPU (Mac Optimization)")
 
-# --- 分頁介面 ---
+# Tab Interface
 tab1, tab2 = st.tabs(["📸 Live Webcam", "📂 Upload Image"])
 
-# --- TAB 1: 即時攝影機 ---
+# TAB 1: Live Webcam
 with tab1:
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -196,21 +149,14 @@ with tab1:
         )
     with col2:
         st.write("### Technical Details")
-        st.write(f"**Active Model:** {model_choice}")
-        if model_choice == "Deep Learning (CNN)":
-            st.markdown("""
-            - **Input:** 64x64 Normalized Pixels
-            - **Architecture:** 3-Layer CNN
-            - **Backend:** TensorFlow (CPU Mode)
-            """)
-        else:
-            st.markdown("""
-            - **Input:** HOG (Shape) + LBP (Texture)
-            - **Algorithm:** Random Forest Classifier
-            - **Backend:** Scikit-Learn
-            """)
+        st.markdown("""
+        - **Input:** 64x64 Normalized Pixels
+        - **Architecture:** 3-Layer CNN
+        - **Backend:** TensorFlow (CPU Mode)
+        - **Output:** Softmax Probabilities
+        """)
 
-# --- TAB 2: 圖片上傳 ---
+# TAB 2: Image Upload
 with tab2:
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
     
@@ -236,10 +182,10 @@ with tab2:
             face_roi = img_gray[y:y+h, x:x+w]
 
         try:
-            label, conf, prob_dict = predict_emotion(face_roi, model_type=model_choice)
+            label, conf, prob_dict = predict_emotion(face_roi)
             
             with col_stats:
-                st.subheader(f"Results ({model_choice})")
+                st.subheader("Results")
                 
                 emoji_map = {"Happy": "😄", "Sad": "😢", "Angry": "😡", "Fear": "😱", "Surprise": "😲", "Neutral": "😐"}
                 emoji = emoji_map.get(label, "😐")
@@ -251,8 +197,7 @@ with tab2:
                 df_probs["Probability"] = df_probs["Probability"] * 100 
                 df_probs = df_probs.set_index("Emotion")
                 
-                chart_color = "#FF4B4B" if model_choice == "Deep Learning (CNN)" else "#00CC96"
-                st.bar_chart(df_probs, color=chart_color)
+                st.bar_chart(df_probs, color="#FF4B4B")
                 
         except Exception as e:
             st.error(f"Prediction Error: {e}")
