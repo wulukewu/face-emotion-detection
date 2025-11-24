@@ -35,7 +35,7 @@ def load_cnn_model():
         # Load label mapping
         if os.path.exists("label_map.joblib"):
             label_map = joblib.load("label_map.joblib")
-            if label_map and isinstance(list(label_map.keys())[0], str):
+            if label_map and len(label_map) > 0 and isinstance(list(label_map.keys())[0], str):
                  resources['inv_map'] = {v: k for k, v in label_map.items()}
             else:
                  resources['inv_map'] = label_map 
