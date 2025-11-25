@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.2...v1.0.3) (2025-11-25)
+
+
+### Bug Fixes
+
+* add detailed HUD to webcam demo ([#10](https://github.com/wulukewu/face-emotion-detection/issues/10)) ([738530f](https://github.com/wulukewu/face-emotion-detection/commit/738530fa7588805976e84dca502e163627fb58a4))
+
 ## [1.0.2](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.1...v1.0.2) (2025-11-25)
 
 
