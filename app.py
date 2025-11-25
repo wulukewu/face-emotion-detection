@@ -192,18 +192,14 @@ st.title(f"🧠 Face Emotion Detection: {model_selection}")
 tab1, tab2 = st.tabs(["📸 Live Webcam", "📂 Upload Image"])
 
 with tab1:
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.subheader("Live Feed")
-        webrtc_streamer(
-            key="emotion-live",
-            mode=WebRtcMode.SENDRECV,
-            video_processor_factory=EmotionProcessor,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-        )
-    with col2:
-        st.info("💡 **Dynamic Colors:**\nThe box color now changes with your emotion!")
+    st.subheader("Live Feed")
+    webrtc_streamer(
+        key="emotion-live",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=EmotionProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
 
 with tab2:
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"], key="uploader")
