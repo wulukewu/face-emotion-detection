@@ -17,21 +17,18 @@ import feature_extractor as fe
 st.set_page_config(page_title="Face Emotion Detection", page_icon="🧠", layout="wide")
 
 # Colors (BGR for OpenCV, RGB for Streamlit/Altair)
-# Note: We handle the typo "Suprise" here explicitly
 EMOTION_COLORS = {
     "Happy":    (0, 255, 255),    # Yellow
     "Sad":      (255, 0, 0),      # Blue
     "Fear":     (255, 0, 255),    # Purple
     "Angry":    (0, 0, 255),      # Red
-    "Surprise": (0, 255, 0),      # Green (Correct spelling)
-    "Suprise":  (0, 255, 0),      # Green (Dataset typo)
+    "Surprise": (0, 255, 0),      # Green
+    "Neutral":  (200, 200, 200)   # Gray
 }
 
 def get_color(label):
     """Helper to get BGR color for OpenCV"""
-    # Remove whitespace and handle title case
     clean_label = label.strip().capitalize()
-    # Default to Green if not found (just in case), or Gray
     return EMOTION_COLORS.get(clean_label, (200, 200, 200))
 
 def bgr_to_hex(bgr_tuple):
@@ -42,7 +39,9 @@ def bgr_to_hex(bgr_tuple):
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Model Selection")
+    # This variable determines which model is active
     model_selection = st.radio("Choose a model:", ("Random Forest", "CNN"))
+    
     st.divider()
     st.markdown("### Visualization Settings")
     show_hud = st.checkbox("Show Detailed HUD", value=True)
@@ -114,10 +113,11 @@ def predict_emotion_cnn(face_img):
     label_map = resources["cnn"]["inv_map"]
     return label_map[best_idx], probs[best_idx], {label_map[i]: float(probs[i]) for i in range(len(probs))}
 
-# --- 4. HUD Drawer (Real-time Video) ---
+# --- 4. HUD Drawer ---
 def draw_hud(img, x, y, w, h, prob_dict, best_label):
     height, width, _ = img.shape
     
+    # Position HUD based on face location
     if x > width // 2: hud_x = x - 170 
     else: hud_x = x + w + 10 
         
@@ -125,7 +125,7 @@ def draw_hud(img, x, y, w, h, prob_dict, best_label):
     hud_w = 160
     hud_h = 20 + (len(prob_dict) * 20)
     
-    # Background
+    # Semi-transparent background
     overlay = img.copy()
     cv2.rectangle(overlay, (hud_x, hud_y), (hud_x + hud_w, hud_y + hud_h), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.6, img, 0.4, 0, img)
@@ -149,12 +149,16 @@ def draw_hud(img, x, y, w, h, prob_dict, best_label):
         bar_len = int(score * 100)
         cv2.rectangle(img, (hud_x + 50, hud_y + y_offset - 5), (hud_x + 50 + bar_len, hud_y + y_offset), bar_color, -1)
         
-        # % Text
+        # Percentage Text
         cv2.putText(img, f"{int(score*100)}%", (hud_x + 125, hud_y + y_offset + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
         y_offset += 20
 
 # --- 5. Video Processor ---
+# We pass the 'model_name' into the class to ensure the thread knows which one to use
 class EmotionProcessor(VideoProcessorBase):
+    def __init__(self, model_name):
+        self.model_name = model_name
+
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
         img = cv2.flip(img, 1)
@@ -165,7 +169,8 @@ class EmotionProcessor(VideoProcessorBase):
         for (x, y, w, h) in faces:
             face_roi = img_gray[y:y+h, x:x+w]
             
-            if model_selection == "CNN":
+            # Use self.model_name (passed from the factory)
+            if self.model_name == "CNN":
                 label, conf, prob_dict = predict_emotion_cnn(face_roi)
             else:
                 label, conf, prob_dict = predict_emotion_rf(face_roi)
@@ -175,7 +180,6 @@ class EmotionProcessor(VideoProcessorBase):
             cv2.rectangle(img, (x, y), (x+w, y+h), box_color, 2)
             cv2.rectangle(img, (x, y-25), (x+w, y), box_color, -1)
             text = f"{label} {int(conf*100)}%"
-            # Use Black text for better contrast on bright colors (Yellow/Green/Cyan)
             cv2.putText(img, text, (x+5, y-7), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,0), 2)
             
             if show_hud:
@@ -193,10 +197,13 @@ tab1, tab2 = st.tabs(["📸 Live Webcam", "📂 Upload Image"])
 
 with tab1:
     st.subheader("Live Feed")
+    # By adding model_selection to the key, Streamlit reloads the widget
+    # whenever you switch models in the sidebar.
     webrtc_streamer(
-        key="emotion-live",
+        key=f"emotion-live-{model_selection}", 
         mode=WebRtcMode.SENDRECV,
-        video_processor_factory=EmotionProcessor,
+        # Pass the model name to the processor factory
+        video_processor_factory=lambda: EmotionProcessor(model_selection),
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True,
     )
@@ -234,27 +241,23 @@ with tab2:
             
             st.markdown("### Probability Distribution")
             
-            # --- CUSTOM CHART LOGIC ---
-            # 1. Prepare Data
+            # Prepare Data for Altair
             df_probs = pd.DataFrame(list(prob_dict.items()), columns=["Emotion", "Probability"])
             df_probs["Probability"] *= 100
             
-            # 2. Get Color of the WINNER (converted to Hex)
+            # Colors
             winner_bgr = get_color(label)
             winner_hex = bgr_to_hex(winner_bgr)
             
-            # 3. Create Altair Chart with Custom Opacity
-            # We want the winner to be solid (Opacity 1.0)
-            # We want others to be lighter version of SAME color (Opacity 0.3)
-            
+            # Custom Chart (Winner Solid, Others Faded)
             chart = alt.Chart(df_probs).mark_bar().encode(
                 x=alt.X('Emotion', sort='-y'),
                 y=alt.Y('Probability'),
-                color=alt.value(winner_hex), # Use the Winner's color for ALL bars
+                color=alt.value(winner_hex),
                 opacity=alt.condition(
-                    alt.datum.Emotion == label,  # If it's the winner...
-                    alt.value(1.0),              # ...Solid
-                    alt.value(0.3)               # ...Else, Faded
+                    alt.datum.Emotion == label,
+                    alt.value(1.0),
+                    alt.value(0.3)
                 ),
                 tooltip=['Emotion', 'Probability']
             ).properties(height=300)
