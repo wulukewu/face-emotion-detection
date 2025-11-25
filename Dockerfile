@@ -1,44 +1,54 @@
-# --- Build Stage ---
-# This stage builds the model and saves it as .joblib files
-FROM python:3.9-slim as builder
+# --- Builder Stage ---
+# This stage installs dependencies, copies code, and trains both models
+FROM python:3.9-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies needed for training
-RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+# Install system dependencies needed for training (OpenCV, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgl1 \
+    libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# Using --break-system-packages for compatibility with newer pip versions in Debian
+RUN pip install --upgrade pip && pip install --no-cache-dir --break-system-packages -r requirements.txt
 
-# Copy the application code and data needed for training
+# Copy all code and data
 COPY . .
 
-# Run the training script to generate the model files
-RUN python train_model.py
-
+# Run the training scripts to generate model files
+# These will be copied to the final image
+RUN python train_model.py && python train_cnn.py
 
 # --- Final Stage ---
-# This stage builds the final, smaller image for deployment
+# This stage creates the final, smaller image for deployment
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install system dependencies needed for OpenCV runtime
-RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+# Install system dependencies needed for runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir --break-system-packages -r requirements.txt
 
-# Copy only the necessary files from the builder stage
-COPY --from=builder /app/app.py .
-COPY --from=builder /app/feature_extractor.py .
+# Copy necessary files from the host
+COPY app.py .
+COPY feature_extractor.py .
+
+# Copy the trained models from the builder stage
 COPY --from=builder /app/emotion_model.joblib .
 COPY --from=builder /app/feature_scaler.joblib .
 COPY --from=builder /app/label_map.joblib .
+COPY --from=builder /app/emotion_model_cnn.h5 .
+
 
 # Expose port and run the application
 EXPOSE 8501

@@ -213,3 +213,4 @@ __marimo__/
 emotion_model.joblib
 feature_scaler.joblib
 label_map.joblib
+emotion_model_cnn.h5
