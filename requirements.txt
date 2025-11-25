@@ -27,3 +27,6 @@ tensorflow-metal; sys_platform == 'darwin' and platform_machine == 'arm64'
 
 # 2. For Windows (win32) or Linux (linux), install standard version
 tensorflow; sys_platform != 'darwin' or platform_machine != 'arm64'
+
+# --- Progress Bar ---
+tqdm
