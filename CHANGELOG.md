@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.1...v1.0.2) (2025-11-25)
+
+
+### Features
+
+* train model using cnn keras ([#8](https://github.com/wulukewu/face-emotion-detection/issues/8)) ([9d6862b](https://github.com/wulukewu/face-emotion-detection/commit/9d6862b83c7fcb535f724b8ca03236db6d5c6e53))
+
 ## [1.0.1](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.0...v1.0.1) (2025-11-23)
 
 
