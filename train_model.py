@@ -133,6 +133,7 @@ print("Running Comparison Experiment...")
 
 feature_sets = {
     "Raw Pixels": X_pixels,
+    "LBP Only": X_lbp,
     "HOG Only": X_hog,
     "Combined (HOG+LBP)": X_combined
 }
