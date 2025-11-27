@@ -29,7 +29,7 @@ def _extract_hog_single(img, visualize=False):
                visualize=visualize,
                feature_vector=True)
 
-# --- 2. APP PIPELINE FUNCTION (This was missing!) ---
+# --- 2. App Pipeline Function ---
 
 def preprocess_and_extract_features_single(image_gray_raw, img_size=(64, 64)):
     """
