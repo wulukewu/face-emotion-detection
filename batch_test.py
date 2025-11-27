@@ -192,4 +192,3 @@ if not df_with_cv.empty:
 
 if not df_without_cv.empty:
     analyze_and_print_results(df_without_cv, "Pipeline Statistics (Without OpenCV Cropping / Full Image)")
-# %%
