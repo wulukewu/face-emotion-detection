@@ -129,7 +129,7 @@ print("\nStarting Training... (Grab a coffee ☕)")
 
 history = model.fit(
     X_train, y_train,
-    epochs=15,             # How many times to read the whole dataset
+    epochs=10,             # How many times to read the whole dataset
     batch_size=32,         # How many images to read at once
     validation_data=(X_test, y_test) # Check accuracy on test data after every epoch
 )
