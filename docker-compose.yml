@@ -6,3 +6,9 @@ services:
     container_name: face-emotion-detection
     ports:
       - "8501:8501"
+    volumes:
+      - ./app.py:/app/app.py
+      - ./emotion_model.joblib:/app/emotion_model.joblib
+      - ./feature_scaler.joblib:/app/feature_scaler.joblib
+      - ./label_map.joblib:/app/label_map.joblib
+      - ./emotion_model_cnn.h5:/app/emotion_model_cnn.h5
