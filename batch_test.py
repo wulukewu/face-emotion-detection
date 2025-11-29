@@ -93,18 +93,20 @@ def predict_cnn(face_img):
         return "Error"
 
 # %%
-print(f"Starting Batch Test on '{TEST_DATA_PATH}'...")
+def run_evaluation(use_opencv_cropping):
+    """Runs a full evaluation pass, with an option to use OpenCV cropping."""
+    print(f"\n--- Running Evaluation (OpenCV Cropping: {use_opencv_cropping}) ---")
+    results = []
+    
+    # Verify path
+    if not os.path.exists(TEST_DATA_PATH):
+        print(f"Error: Folder '{TEST_DATA_PATH}' does not exist.")
+        return pd.DataFrame()
 
-results = []
-
-# Verify path
-if not os.path.exists(TEST_DATA_PATH):
-    print(f"Error: Folder '{TEST_DATA_PATH}' does not exist.")
-else:
     # Get total count for progress bar
     total_files = sum([len(files) for r, d, files in os.walk(TEST_DATA_PATH)])
     
-    with tqdm(total=total_files) as pbar:
+    with tqdm(total=total_files, desc=f"Mode: {'OpenCV' if use_opencv_cropping else 'Full Image'}") as pbar:
         for emotion_folder in os.listdir(TEST_DATA_PATH):
             folder_path = os.path.join(TEST_DATA_PATH, emotion_folder)
             if not os.path.isdir(folder_path): continue
@@ -120,8 +122,15 @@ else:
                     pbar.update(1)
                     continue
                 
-                # 2. Pipeline: Detect Face
-                face_roi, face_found = get_face_roi(img)
+                face_roi = None
+                face_found = "N/A"
+
+                if use_opencv_cropping:
+                    # 2. Pipeline: Detect Face
+                    face_roi, face_found = get_face_roi(img)
+                else:
+                    # 2. Pipeline: Just resize the whole image
+                    face_roi = cv2.resize(img, IMG_SIZE)
                 
                 # 3. Predict
                 pred_rf = predict_rf(face_roi)
@@ -136,66 +145,50 @@ else:
                 })
                 pbar.update(1)
 
-# Convert to DataFrame
-df = pd.DataFrame(results)
-print("\nTesting Complete.")
-print(df.head())
+    # Convert to DataFrame
+    df = pd.DataFrame(results)
+    print("\nTesting Complete.")
+    return df
 
-# %%
-# Filter out any errors
-df_clean = df[df["Pred_RF"] != "Error"]
+def analyze_and_print_results(df, title):
+    """Takes a results dataframe and prints all statistics and reports."""
+    print(f"\n--- 📊 {title} ---")
 
-# Calculate Accuracies
-acc_rf = accuracy_score(df_clean["True_Label"], df_clean["Pred_RF"])
-acc_cnn = accuracy_score(df_clean["True_Label"], df_clean["Pred_CNN"])
-face_det_rate = df_clean["Face_Detected"].mean()
+    # Filter out any errors during prediction
+    df_clean = df[(df["Pred_RF"] != "Error") & (df["Pred_CNN"] != "Error")].copy()
+    if len(df_clean) == 0:
+        print("No successful predictions to analyze.")
+        return
 
-print(f"\n--- 📊 Pipeline Statistics ---")
-print(f"Total Images Tested: {len(df_clean)}")
-print(f"Face Detection Success Rate: {face_det_rate:.2%}")
-print(f"Random Forest Accuracy: {acc_rf:.2%}")
-print(f"CNN Accuracy: {acc_cnn:.2%}")
-
-# --- 5. Per-Emotion Accuracy (Classification Report) ---
-print("\n--- 🌲 Random Forest Report ---")
-print(classification_report(df_clean["True_Label"], df_clean["Pred_RF"]))
-
-print("\n--- 🧠 CNN Report ---")
-print(classification_report(df_clean["True_Label"], df_clean["Pred_CNN"]))
-
-# %%
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-# Get unique labels for axis sorting
-labels = sorted(df_clean["True_Label"].unique())
-
-# Random Forest CM
-cm_rf = confusion_matrix(df_clean["True_Label"], df_clean["Pred_RF"], labels=labels)
-sns.heatmap(cm_rf, annot=True, fmt='d', cmap='Greens', xticklabels=labels, yticklabels=labels, ax=axes[0])
-axes[0].set_title(f"Random Forest (Acc: {acc_rf:.1%})")
-axes[0].set_xlabel("Predicted")
-axes[0].set_ylabel("Actual")
-
-# CNN CM
-cm_cnn = confusion_matrix(df_clean["True_Label"], df_clean["Pred_CNN"], labels=labels)
-sns.heatmap(cm_cnn, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels, ax=axes[1])
-axes[1].set_title(f"CNN (Acc: {acc_cnn:.1%})")
-axes[1].set_xlabel("Predicted")
-axes[1].set_ylabel("Actual")
-
-plt.tight_layout()
-plt.show()
-
-# %%
-if not df_clean["Face_Detected"].all():
-    print("\n--- 🕵️ Face Detection Impact ---")
+    # Calculate Accuracies
+    acc_rf = accuracy_score(df_clean["True_Label"], df_clean["Pred_RF"])
+    acc_cnn = accuracy_score(df_clean["True_Label"], df_clean["Pred_CNN"])
     
-    df_found = df_clean[df_clean["Face_Detected"] == True]
-    df_missed = df_clean[df_clean["Face_Detected"] == False]
-    
-    acc_rf_found = accuracy_score(df_found["True_Label"], df_found["Pred_RF"])
-    acc_rf_missed = accuracy_score(df_missed["True_Label"], df_missed["Pred_RF"])
-    
-    print(f"Accuracy when Face Detected: {acc_rf_found:.2%}")
-    print(f"Accuracy when Face MISSED (Fallback): {acc_rf_missed:.2%}")
-    print("This shows how important the Face Detector is to the pipeline!")
+    print(f"Total Images Tested: {len(df_clean)}")
+    # Only show face detection rate if it's relevant
+    if df_clean["Face_Detected"].dtype == 'bool':
+        face_det_rate = df_clean["Face_Detected"].mean()
+        print(f"Face Detection Success Rate: {face_det_rate:.2%}")
+
+    print(f"Random Forest Accuracy: {acc_rf:.2%}")
+    print(f"CNN Accuracy: {acc_cnn:.2%}")
+
+    # --- Per-Emotion Accuracy (Classification Report) ---
+    print("\n--- 🌲 Random Forest Report ---")
+    print(classification_report(df_clean["True_Label"], df_clean["Pred_RF"]))
+
+    print("\n--- 🧠 CNN Report ---")
+    print(classification_report(df_clean["True_Label"], df_clean["Pred_CNN"]))
+
+print(f"Starting Batch Test on '{TEST_DATA_PATH}'...")
+
+# --- Run Both Evaluations ---
+df_with_cv = run_evaluation(use_opencv_cropping=True)
+df_without_cv = run_evaluation(use_opencv_cropping=False)
+
+# --- Analyze and Print Results ---
+if not df_with_cv.empty:
+    analyze_and_print_results(df_with_cv, "Pipeline Statistics (With OpenCV Cropping)")
+
+if not df_without_cv.empty:
+    analyze_and_print_results(df_without_cv, "Pipeline Statistics (Without OpenCV Cropping)")

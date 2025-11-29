@@ -55,7 +55,7 @@ for emotion_folder in os.listdir(DATA_PATH):
             images.append(img_resized)
             labels.append(current_label)
 
-# Convert to Numpy Arrays (The format ML models need)
+# Convert to Numpy Arrays
 X_raw = np.array(images)
 y = np.array(labels)
 inv_label_map = {v: k for k, v in label_map.items()}
@@ -133,6 +133,7 @@ print("Running Comparison Experiment...")
 
 feature_sets = {
     "Raw Pixels": X_pixels,
+    "LBP Only": X_lbp,
     "HOG Only": X_hog,
     "Combined (HOG+LBP)": X_combined
 }
@@ -143,7 +144,7 @@ for name, X_data in feature_sets.items():
     # Split Data 80% Train / 20% Test
     X_train, X_test, y_train, y_test = train_test_split(X_data, y, test_size=0.2, stratify=y)
     
-    # Scale Data (Important for ML!)
+    # Scale Data
     scaler = StandardScaler()
     X_train_sc = scaler.fit_transform(X_train)
     X_test_sc = scaler.transform(X_test)
