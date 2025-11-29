@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.3...v1.1.0) (2025-11-29)
+
+
+### Features
+
+* batch test models ability ([#12](https://github.com/wulukewu/face-emotion-detection/issues/12)) ([dc2c4da](https://github.com/wulukewu/face-emotion-detection/commit/dc2c4da4ba1f61fa5a0d74605acd34a10c1e4b65))
+
+
+### Bug Fixes
+
+* cnn model ([#15](https://github.com/wulukewu/face-emotion-detection/issues/15)) ([c99352a](https://github.com/wulukewu/face-emotion-detection/commit/c99352a913c9d32d0655fe1bcad124d68db57d2e))
+* compare models by using opencv or not ([#14](https://github.com/wulukewu/face-emotion-detection/issues/14)) ([c29c101](https://github.com/wulukewu/face-emotion-detection/commit/c29c1018603c12076e3f9769cf82e05c0cc40bce))
+* project overview and readme ([#16](https://github.com/wulukewu/face-emotion-detection/issues/16)) ([7000439](https://github.com/wulukewu/face-emotion-detection/commit/7000439e4cb1715732be2203fe1881addd57dc6a))
+
 ## [1.0.3](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.2...v1.0.3) (2025-11-25)
 
 
