@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/wulukewu/face-emotion-detection/compare/v1.1.0...v1.1.1) (2025-11-30)
+
+
+### Bug Fixes
+
+* demo app analysis with sad and fear ([#17](https://github.com/wulukewu/face-emotion-detection/issues/17)) ([34e2bde](https://github.com/wulukewu/face-emotion-detection/commit/34e2bde6dde22e99422467d378f8de222f2fa800))
+
 ## [1.1.0](https://github.com/wulukewu/face-emotion-detection/compare/v1.0.3...v1.1.0) (2025-11-29)
 
 
