@@ -235,8 +235,16 @@ if page == "📖 Project Overview":
     st.table(pd.DataFrame(metrics_data))
     
     st.warning("""
-    **Note on Bias:** Both models struggle to distinguish between **'Sad'** and **'Fear'**, often classifying them as **'Angry'**. 
-    This is due to the dataset distribution and the similarity in facial muscle movements for these negative emotions.
+    ### 📉 Analysis: Why "Sad" & "Fear" are hard to detect?
+    
+    In this experiment, both models struggled to distinguish between **“Sad”** and **“Fear,”** often misclassifying them as **“Angry.”** 
+    
+    This bias mainly stems from two factors:
+    1. **Imbalanced Dataset:** The models had limited exposure to “Sad” and “Fear” samples during training.
+    2. **Facial Similarity:** These negative emotions share highly similar facial muscle movements (e.g., lowered eyebrows), making them difficult to separate.
+    
+    **🚀 Future Work:**  
+    Techniques such as **data augmentation** or **balancing the sample sizes** could help improve performance in recognizing these subtle emotional differences.
     """)
 
 # ==========================================
